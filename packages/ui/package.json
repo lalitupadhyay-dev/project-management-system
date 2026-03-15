@@ -1,5 +1,5 @@
 {
-  "name": "@repo/ui",
+  "name": "@pma/ui",
   "version": "0.0.0",
   "exports": {
     "./counter": "./components/counter.ts",
@@ -11,8 +11,8 @@
     "lint": "eslint \"**/*.ts\""
   },
   "devDependencies": {
-    "@repo/eslint-config": "*",
-    "@repo/typescript-config": "*",
+    "@pma/eslint-config": "*",
+    "@pma/typescript-config": "*",
     "eslint": "^8.57.0",
     "typescript": "5.5.4"
   }

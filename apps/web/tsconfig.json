@@ -1,7 +1,7 @@
 {
-  "extends": "@repo/typescript-config/vite.json",
+  "extends": "@pma/typescript-config/vite.json",
   "include": ["src"],
   "compilerOptions": {
-    "strictNullChecks": true
+    "strictNullChecks": true,
   }
 }
