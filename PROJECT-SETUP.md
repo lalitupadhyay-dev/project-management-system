@@ -693,3 +693,104 @@ npm run dev
 | Prisma Studio | http://localhost:5555 |
 | PostgreSQL | localhost:5432 |
 | Redis | localhost:6379 |
+
+---
+
+## Runnig First Migration: Problems We Hit & How We Fixed Them
+
+### 1. Prisma P1000 — "Authentication Failed" (But Credentials Were Correct)
+
+We ran `npx prisma migrate dev --name init` and got this:
+```
+Error: P1000: Authentication failed against database server,
+the provided database credentials for `pma_user` are not valid.
+```
+
+The frustrating part was — the credentials WERE correct. We confirmed this by
+connecting directly to the container:
+```bash
+docker exec -it pma_postgres psql -U pma_user -d pma_db
+```
+
+It connected fine. So why was Prisma failing?
+
+We ran this to check what's listening on port 5432:
+```bash
+netstat -ano | findstr :5432
+```
+
+And saw TWO processes on the same port:
+```
+TCP    0.0.0.0:5432    LISTENING    7456
+TCP    0.0.0.0:5432    LISTENING    30524
+```
+
+Then checked what those processes were:
+```bash
+tasklist | findstr 7456
+tasklist | findstr 30524
+```
+
+Output:
+```
+postgres.exe          7456   ← native PostgreSQL installed on the machine
+com.docker.backend.exe 30524  ← Docker
+```
+
+There was a **native PostgreSQL installation** on the machine already using port
+5432. Docker was also trying to use 5432. Prisma was hitting the native one
+which had completely different credentials — that's why authentication failed
+even though our Docker credentials were correct.
+
+**The fix was to move Docker to port 5433:**
+
+In `docker-compose.yml`:
+```yaml
+postgres:
+  ports:
+    - "5433:5432"   # host 5433 → container stays on 5432 internally
+```
+
+And update `DATABASE_URL` everywhere it appears:
+```
+DATABASE_URL="postgresql://pma_user:pma_password@localhost:5433/pma_db?schema=public"
+```
+
+Then restart Docker fresh:
+```bash
+docker compose down
+docker compose up -d
+```
+
+Migration ran successfully after this.
+
+> **Lesson:** P1000 doesn't always mean wrong credentials. It can mean Prisma
+> is hitting the wrong database entirely. Always check for port conflicts first
+> if your credentials are confirmed correct.
+
+---
+
+### 2. Always Run Prisma Commands From `apps/api`
+
+We tried running the migration from the monorepo root:
+```bash
+npx prisma migrate dev --name init --schema=apps/api/prisma/schema.prisma
+```
+
+Got this error:
+```
+Error: The datasource.url property is required in your Prisma config file.
+```
+
+Even though the URL was set. The problem was that Prisma looks for
+`prisma.config.ts` relative to where you run the command. Running from root,
+it couldn't find the config file properly.
+
+**Always run Prisma commands from inside `apps/api`:**
+```bash
+cd apps/api
+npx prisma migrate dev --name init       # ✅
+npx prisma generate                      # ✅
+npx prisma studio                        # ✅
+npx prisma migrate reset                 # ✅
+```
